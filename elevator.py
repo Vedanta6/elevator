@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import time
 import sys
-from threading import Thread
+from threading import Thread, Event
 
 
 class Elevator:
@@ -87,7 +87,7 @@ class Elevator:
             if inside:
                 change_direction = True
                 for button in inside_buttons:
-                    if button > self.elevator_story:
+                    if button >= self.elevator_story:
                         next_move = button
                         change_direction = False
                         self.go_to_story(next_move)
@@ -103,7 +103,7 @@ class Elevator:
                 buttons.sort(reverse=True)
                 change_direction = True
                 for button in buttons:
-                    if button < self.elevator_story:
+                    if button <= self.elevator_story:
                         next_move = button
                         change_direction = False
                         self.go_to_story(next_move)
@@ -118,11 +118,9 @@ class Elevator:
 - высота одного этажа;
 - скорость лифта при движении в метрах в секунду;
 - время между открытием и закрытием дверей.
-
 Управление лифтом:
 - вызов лифта на этаж из подъезда;      - outside_call
 - нажать на кнопку этажа внутри лифта.  - inside_call
-
 Выводимые действия:
 - лифт проезжает некоторый этаж;
 - лифт открыл двери;
@@ -139,7 +137,7 @@ def get_arguments_from_cmd():
         args.append(int(sys.argv[1]) if int(sys.argv[1]) in range(5, 21) else 5)
         for index, arg in enumerate(sys.argv[2:]):
             try:
-                if ranges[0] <= float(arg) <= ranges[1]:
+                if ranges[0] < float(arg) <= ranges[1]:
                     args.append(float(arg))
                 else:
                     raise ValueError
@@ -150,7 +148,7 @@ def get_arguments_from_cmd():
     return args
 
 
-def cmd_reader(e):
+def cmd_reader(e, event_name):
     """ Process the commands from user """
     n_of_elevator_stories = e.get_number_of_stories()
     while 1:
@@ -162,8 +160,10 @@ def cmd_reader(e):
                 check_story = story in range(1, n_of_elevator_stories + 1)
                 if cmd_io == 'i' and check_story:
                     e.button_in_elevator_was_pressed(story)
+                    event_name.set()
                 elif cmd_io == 'o' and check_story:
                     e.button_on_story_was_pressed(story)
+                    event_name.set()
             except ValueError or IndexError:
                 pass
             except KeyboardInterrupt:
@@ -174,11 +174,13 @@ def cmd_reader(e):
             break
 
 
-def run_elevator(e):
+def run_elevator(e, event_name):
     """ Run elevator algorithm """
     while 1:
         try:
-            e.send_elevator()
+            if event_name.is_set():
+                event_name.clear()
+                e.send_elevator()
         except KeyboardInterrupt:
             break
 
@@ -189,7 +191,8 @@ if __name__ == '__main__':
                         elevator_rate=e_rate, doors_delay=doors_dt)
     print('Enter \"i<story>\" to press the button with the number of a story inside the elevator',
           ' or \"o<story>\" to press the button on a story')
-    t_cmd = Thread(target=cmd_reader, args=(elevator,))
+    event = Event()
+    t_cmd = Thread(target=cmd_reader, args=(elevator, event))
+    t_elevator = Thread(target=run_elevator, args=(elevator, event))
     t_cmd.start()
-    t_elevator = Thread(target=run_elevator, args=(elevator,))
     t_elevator.start()
