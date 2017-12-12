@@ -178,9 +178,9 @@ def run_elevator(e, event_name):
     """ Run elevator algorithm """
     while 1:
         try:
-            if event_name.is_set():
-                event_name.clear()
-                e.send_elevator()
+            event_name.wait()
+            event_name.clear()
+            e.send_elevator()
         except KeyboardInterrupt:
             break
 
